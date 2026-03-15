@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IP Cam – Camera</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #111; color: #eee; font-family: sans-serif;
+           display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    header { width: 100%; padding: 12px 16px; background: #1e1e1e;
+             display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 18px; }
+    #statusDot { width: 12px; height: 12px; border-radius: 50%; background: #555; flex-shrink: 0; }
+    #statusDot.connected { background: #03DAC5; }
+    #statusDot.error { background: #CF6679; }
+    #statusText { font-size: 13px; color: #aaa; flex: 1; }
+    video { width: 100%; max-width: 720px; margin-top: 12px; border-radius: 8px;
+            background: #000; display: block; }
+    .controls { margin: 16px 0; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    button { padding: 10px 24px; font-size: 15px; border: none; border-radius: 6px;
+             cursor: pointer; font-weight: bold; }
+    #btnStart { background: #03DAC5; color: #000; }
+    #btnStart.active { background: #CF6679; color: #fff; }
+    .settings { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; }
+    select { background: #333; color: #eee; border: 1px solid #555; border-radius: 4px;
+             padding: 4px 8px; font-size: 13px; }
+    .hint { max-width: 600px; padding: 12px 16px; background: #2a2a2a; border-radius: 6px;
+            font-size: 12px; color: #999; line-height: 1.6; margin: 0 16px 16px; }
+    .hint a { color: #BB86FC; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div id="statusDot"></div>
+  <span id="statusText">Not connected</span>
+  <h1>📷 Camera</h1>
+</header>
+
+<video id="video" autoplay playsinline muted></video>
+
+<div class="controls">
+  <div class="settings">
+    <label for="fps">FPS:</label>
+    <select id="fps">
+      <option value="5">5</option>
+      <option value="10" selected>10</option>
+      <option value="15">15</option>
+      <option value="24">24</option>
+      <option value="30">30</option>
+    </select>
+    <label for="quality">Quality:</label>
+    <select id="quality">
+      <option value="0.5">Low</option>
+      <option value="0.7" selected>Medium</option>
+      <option value="0.9">High</option>
+    </select>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btnStart">Start Streaming</button>
+</div>
+
+<div class="hint">
+  <strong>⚠ Camera access over HTTP</strong><br />
+  Most browsers require HTTPS for camera access on non-localhost origins.
+  To enable it on your local network:<br />
+  • <strong>Chrome / Edge</strong>: go to
+    <a href="chrome://flags/#unsafely-treat-insecure-origin-as-secure" target="_blank">
+      chrome://flags/#unsafely-treat-insecure-origin-as-secure</a>,
+    add this page's origin (e.g. <code id="originHint"></code>), enable &amp; relaunch.<br />
+  • <strong>Firefox</strong>: open <code>about:config</code> →
+    set <code>media.devices.insecure.enabled</code> to <code>true</code>.
+</div>
+
+<script>
+  document.getElementById('originHint').textContent = location.origin;
+
+  const video    = document.getElementById('video');
+  const dot      = document.getElementById('statusDot');
+  const statusTx = document.getElementById('statusText');
+  const btnStart = document.getElementById('btnStart');
+  const fpsEl    = document.getElementById('fps');
+  const qualEl   = document.getElementById('quality');
+
+  let ws = null;
+  let streaming = false;
+  let frameTimer = null;
+  const canvas = document.createElement('canvas');
+
+  function setStatus(msg, state) { // state: '' | 'connected' | 'error'
+    statusTx.textContent = msg;
+    dot.className = state;
+  }
+
+  btnStart.addEventListener('click', () => {
+    if (streaming) stop();
+    else start();
+  });
+
+  async function start() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      video.srcObject = stream;
+
+      const wsUrl = 'ws://' + location.host + '/ws/camera';
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        setStatus('Streaming…', 'connected');
+        btnStart.textContent = 'Stop Streaming';
+        btnStart.classList.add('active');
+        streaming = true;
+        scheduleFrame();
+      };
+
+      ws.onclose = () => {
+        setStatus('Disconnected', 'error');
+        btnStart.textContent = 'Start Streaming';
+        btnStart.classList.remove('active');
+        streaming = false;
+        clearTimeout(frameTimer);
+      };
+
+      ws.onerror = () => ws.close();
+
+    } catch (err) {
+      setStatus('Error: ' + err.message, 'error');
+    }
+  }
+
+  function stop() {
+    if (ws) ws.close();
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+    }
+    clearTimeout(frameTimer);
+    streaming = false;
+    btnStart.textContent = 'Start Streaming';
+    btnStart.classList.remove('active');
+    setStatus('Stopped', '');
+  }
+
+  function scheduleFrame() {
+    if (!streaming) return;
+    const fps = parseInt(fpsEl.value, 10) || 10;
+    frameTimer = setTimeout(sendFrame, 1000 / fps);
+  }
+
+  function sendFrame() {
+    if (!streaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!video.videoWidth) { scheduleFrame(); return; }
+
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob(blob => {
+      if (blob && ws.readyState === WebSocket.OPEN) {
+        blob.arrayBuffer().then(buf => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(buf);
+          scheduleFrame();
+        });
+      } else {
+        scheduleFrame();
+      }
+    }, 'image/jpeg', parseFloat(qualEl.value));
+  }
+</script>
+</body>
+</html>

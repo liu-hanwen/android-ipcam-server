@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IP Cam Server</string>
+    <string name="start_server">Start Server</string>
+    <string name="stop_server">Stop Server</string>
+    <string name="status_stopped">Server stopped</string>
+    <string name="status_running">Server running…</string>
+    <string name="status_running_detail">Running  |  Camera: %1$s  |  Monitors: %2$d</string>
+    <string name="camera_connected">connected</string>
+    <string name="camera_not_connected">not connected</string>
+    <string name="camera_url_label">Camera URL (open on camera device)</string>
+    <string name="monitor_url_label">Monitor URL (open on viewing device)</string>
+    <string name="copy">Copy</string>
+    <string name="copied">URL copied</string>
+    <string name="usage_hint">Note: To use camera streaming from a browser over HTTP you may need to enable
+insecure camera access:\n• Chrome: chrome://flags/#unsafely-treat-insecure-origin-as-secure\n• Firefox: about:config → media.devices.insecure.enabled = true</string>
+</resources>
