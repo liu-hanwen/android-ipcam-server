@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IP Cam – Monitor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #111; color: #eee; font-family: sans-serif;
+           display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    header { width: 100%; padding: 12px 16px; background: #1e1e1e;
+             display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 18px; }
+    #statusDot { width: 12px; height: 12px; border-radius: 50%; background: #555; flex-shrink: 0; }
+    #statusDot.connected { background: #03DAC5; }
+    #statusDot.streaming { background: #03DAC5; animation: pulse 1s infinite; }
+    #statusDot.error     { background: #CF6679; }
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+    #statusText { font-size: 13px; color: #aaa; flex: 1; }
+    #stats { font-size: 12px; color: #666; }
+    #frame { width: 100%; max-width: 1280px; display: block; border-radius: 8px;
+             background: #000; margin-top: 12px; }
+    #placeholder { width: 100%; max-width: 720px; aspect-ratio: 16/9;
+                   display: flex; align-items: center; justify-content: center;
+                   background: #1a1a1a; border-radius: 8px; margin-top: 12px;
+                   color: #555; font-size: 18px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div id="statusDot"></div>
+  <span id="statusText">Connecting…</span>
+  <h1>🖥 Monitor</h1>
+  <span id="stats"></span>
+</header>
+
+<div id="placeholder">Waiting for camera…</div>
+<img id="frame" alt="Camera feed" style="display:none" />
+
+<script>
+  const dot      = document.getElementById('statusDot');
+  const statusTx = document.getElementById('statusText');
+  const statsEl  = document.getElementById('stats');
+  const frame    = document.getElementById('frame');
+  const ph       = document.getElementById('placeholder');
+
+  let prevObjectUrl = null;
+  let frameCount = 0;
+  let lastFpsTime = Date.now();
+  let fpsDisplay = 0;
+
+  function setStatus(msg, state) {
+    statusTx.textContent = msg;
+    dot.className = state;
+  }
+
+  function connect() {
+    const wsUrl = 'ws://' + location.host + '/ws/monitor';
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => setStatus('Connected — waiting for camera…', 'connected');
+
+    ws.onmessage = e => {
+      // Replace current frame blob
+      if (prevObjectUrl) URL.revokeObjectURL(prevObjectUrl);
+      const blob = new Blob([e.data], { type: 'image/jpeg' });
+      prevObjectUrl = URL.createObjectURL(blob);
+      frame.src = prevObjectUrl;
+
+      if (frame.style.display === 'none') {
+        ph.style.display = 'none';
+        frame.style.display = 'block';
+      }
+
+      // FPS counter
+      frameCount++;
+      const now = Date.now();
+      if (now - lastFpsTime >= 1000) {
+        fpsDisplay = Math.round(frameCount * 1000 / (now - lastFpsTime));
+        frameCount = 0;
+        lastFpsTime = now;
+        statsEl.textContent = fpsDisplay + ' fps';
+      }
+      setStatus('Streaming', 'streaming');
+    };
+
+    ws.onclose = () => {
+      setStatus('Disconnected — reconnecting…', 'error');
+      statsEl.textContent = '';
+      frame.style.display = 'none';
+      ph.style.display = 'flex';
+      setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  connect();
+</script>
+</body>
+</html>
