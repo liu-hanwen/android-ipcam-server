@@ -1,62 +1,70 @@
 # android-ipcam-server
 
-An Android app that acts as a local-network **IP camera relay server**.
+一个将 Android 设备作为局域网 **IP 摄像头中继服务器** 的应用。
 
-## How it works
+## 工作原理
 
 ```
-Browser (Camera device) ──WS──► Android server ──WS──► Browser (Monitor device)
-        getUserMedia()           port 8080              <img> JPEG frames
+浏览器（摄像设备）──WS──► Android 服务器 ──WS──► 浏览器（监控设备）
+   getUserMedia()          端口 8080              <img> JPEG 帧
 ```
 
-1. **Camera page** (`/camera`) – open on any device (phone, laptop) you want to use as a camera.
-   The browser captures the camera with `getUserMedia`, encodes JPEG frames, and streams them via WebSocket to the Android server.
+1. **摄像页面**（`/camera`）——在任意想用作摄像头的设备（手机、电脑等）上打开。
+   浏览器通过 `getUserMedia` 采集摄像头画面，将其编码为 JPEG 帧并经 WebSocket 推送到 Android 服务器。
 
-2. **Monitor page** (`/monitor`) – open on any device you want to watch the live stream.
-   Receives JPEG frames via WebSocket and displays them as a live feed.
+2. **监控页面**（`/monitor`）——在任意想观看直播的设备上打开。
+   通过 WebSocket 接收 JPEG 帧并实时显示。
 
-The Android app itself just relays data – it has no camera of its own.
+Android 应用本身只负责转发数据，不具备独立摄像功能。
 
-## Getting started
+## 快速开始
 
-1. Install the app on an Android device connected to your local Wi-Fi.
-2. Tap **Start Server**.
-3. The app shows two URLs, e.g. `http://192.168.1.100:8080/camera` and `.../monitor`.
-4. Open the camera URL in the browser on the camera device and tap **Start Streaming**.
-5. Open the monitor URL on any other device to watch the feed.
+1. 将 APK 安装到已连接局域网 Wi-Fi 的 Android 设备上（直接下载见下方）。
+2. 点击 **启动服务器**。
+3. 应用将显示两个地址，例如 `http://192.168.1.100:8080/camera` 和 `.../monitor`。
+4. 在摄像设备的浏览器中打开摄像地址，点击 **开始推流**。
+5. 在任意其他设备上打开监控地址即可观看实时画面。
 
-> **Note:** Most browsers require HTTPS for `getUserMedia` on non-localhost origins.
-> For LAN use without HTTPS:
-> * **Chrome / Edge:** go to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`,
->   add the server origin (e.g. `http://192.168.1.100:8080`), enable and relaunch.
-> * **Firefox:** open `about:config` → set `media.devices.insecure.enabled` to `true`.
+> **注意：** 大多数浏览器在非 localhost 来源下需要 HTTPS 才能使用 `getUserMedia`。
+> 如需在局域网中不使用 HTTPS：
+> * **Chrome / Edge：** 访问 `chrome://flags/#unsafely-treat-insecure-origin-as-secure`，
+>   添加服务器地址（如 `http://192.168.1.100:8080`），启用后重启浏览器。
+> * **Firefox：** 打开 `about:config` → 将 `media.devices.insecure.enabled` 设为 `true`。
 
-## Building
+## 下载安装
 
-Requirements: Android SDK (API 34), JDK 17+.
+已构建好的 Release APK 可直接下载安装：
+
+**[📥 下载 ipcamserver-release.apk](releases/ipcamserver-release.apk)**
+
+> 由于使用的是自签名证书，安装时 Android 系统会提示"未知来源"，请在手机设置中允许安装来自未知来源的应用。
+
+## 自行构建
+
+环境要求：Android SDK（API 34）、JDK 17+。
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleRelease
 ```
 
-The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
+生成的 APK 位于 `app/build/outputs/apk/release/app-release.apk`。
 
-## Project structure
+## 项目结构
 
 ```
 app/src/main/
   java/com/ipcamserver/
-    MainActivity.java    – UI: start/stop server, show URLs
-    ServerService.java   – Foreground service keeping the server alive
-    WebServer.java       – NanoHTTPD/NanoWSD HTTP + WebSocket relay server
+    MainActivity.java    – UI：启动/停止服务器、显示地址
+    ServerService.java   – 前台服务，保持服务器持续运行
+    WebServer.java       – 基于 NanoHTTPD/NanoWSD 的 HTTP + WebSocket 中继服务器
   assets/
-    camera.html          – Browser camera streaming page
-    monitor.html         – Browser monitor viewing page
+    camera.html          – 浏览器摄像推流页面
+    monitor.html         – 浏览器监控查看页面
   res/
     layout/activity_main.xml
     values/strings.xml
 ```
 
-## Dependencies
+## 依赖
 
-* [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) `nanohttpd-websocket:2.3.1` (Maven Central)
+* [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) `nanohttpd-websocket:2.3.1`（Maven Central）
